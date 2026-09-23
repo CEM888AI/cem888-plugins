@@ -1,0 +1,10 @@
+{
+  "name": "cem888-runtime",
+  "version": "0.1.0",
+  "description": "Native CEM888 lifecycle for Claude Cowork: automatic inhale every turn, owner hard-NO gate before tools, automatic exhale after every response.",
+  "author": { "name": "Chandler Morone / CEM Unlimited LLC", "email": "creator@cem888.ai" },
+  "homepage": "https://cem888.ai",
+  "repository": "https://github.com/CEM888AI/cem888",
+  "license": "AGPL-3.0",
+  "keywords": ["cem888", "continuity", "state", "authority", "hooks"]
+}

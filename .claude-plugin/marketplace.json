@@ -1,0 +1,24 @@
+{
+  "name": "cem888",
+  "owner": {
+    "name": "CEM Unlimited LLC",
+    "email": "creator@cem888.ai"
+  },
+  "metadata": {
+    "description": "Official CEM888 plugins: the CEM888 reliability, continuity and control runtime for Claude Cowork and Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "cem888-runtime",
+      "source": "./plugins/cem888-runtime",
+      "description": "Automatic CEM888 lifecycle: inhale authoritative state every turn, enforce owner hard-NO rules before tools, exhale every finished turn.",
+      "version": "0.1.0",
+      "author": { "name": "Chandler Morone / CEM Unlimited LLC", "email": "creator@cem888.ai" },
+      "homepage": "https://cem888.ai",
+      "license": "AGPL-3.0",
+      "keywords": ["cem888", "continuity", "state", "authority", "hooks"],
+      "category": "productivity"
+    }
+  ]
+}

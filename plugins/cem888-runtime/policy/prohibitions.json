@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "_comment": "Owner hard-NO rules, matched deterministically before every tool call. The model is blocked from editing this file. Owner edits it, or ~/.cem888/prohibitions.json (merged on top).",
+  "rules": [
+    {
+      "id": "example-disabled",
+      "enabled": false,
+      "reason": "Example: never deploy through the retired site repo.",
+      "match": { "tool": "Bash", "command_contains": ["CEM888.AI-Site"] }
+    }
+  ]
+}

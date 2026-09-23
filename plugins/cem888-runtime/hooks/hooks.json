@@ -1,0 +1,17 @@
+{
+  "description": "CEM888 lifecycle: SessionStart inhale, UserPromptSubmit begin-turn inhale, PreToolUse owner-prohibition gate, Stop exhale.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" session-start", "timeout": 20 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" prompt-submit", "timeout": 20 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": ".*", "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" pre-tool", "timeout": 10 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" stop", "timeout": 30 } ] }
+    ]
+  }
+}
