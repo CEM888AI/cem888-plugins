@@ -7,7 +7,7 @@ Makes CEM888 native in Claude Cowork (and Claude Code). The model no longer has 
 | SessionStart | `cem_start_conversation` | Profile, current state and open work injected at session start |
 | UserPromptSubmit | `cem_begin_external_turn` | Compiled current context injected before Claude reads your message (inhale) |
 | PreToolUse | local owner-prohibition gate | Hard-NO enforced before any tool runs; fails closed for mutating tools |
-| Stop | `cem_finish_external_turn` | Finished turn committed back to CEM888 exactly once (exhale) |
+| Stop | `cem_finish_external_turn` | Finished turn committed back to CEM888 exactly once (exhale), in the background |
 
 ## Setup
 
@@ -36,6 +36,8 @@ The gate also blocks the model from editing the policy files, the token, the plu
 ## Guarantees and limits (honest classification)
 
 - Inhale and exhale are automatic, not model-voluntary. They fail soft: a CEM outage never breaks the session.
+- Exhale runs detached: the Stop hook returns immediately and the commit finishes in the background. If CEM is unreachable, the turn waits in `~/.cem888/cowork/pending_*.json` and is committed exactly once on the next Stop or session start (same turn id, idempotent replay). Set `CEM888_SYNC_EXHALE=1` to commit inline instead.
+- Timeouts: `CEM888_BEGIN_TIMEOUT` (default 8s), `CEM888_FINISH_TIMEOUT` (default 45s).
 - The prohibition gate covers every tool call that passes through the host's PreToolUse hook. Matching is literal/typed; semantic equivalents that avoid the listed strings are not caught (advisory layer via the skill only).
 - Logs: `~/.cem888/cowork/hooks.log`.
 - Status: BETA. Not yet certified on the frozen customer artifact. Hooks in Cowork plugins have a reported Windows issue; test on each OS before claiming support.

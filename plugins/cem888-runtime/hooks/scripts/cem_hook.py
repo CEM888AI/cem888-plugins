@@ -6,6 +6,7 @@ Events (stdin = hook JSON from the host, stdout = hook JSON back):
   prompt-submit  -> cem_begin_external_turn  -> inject compiled per-turn context
   pre-tool       -> owner prohibition gate   -> deny before execution (deterministic, local)
   stop           -> cem_finish_external_turn -> exhale the finished turn exactly once
+                                                (detached: Stop returns immediately)
 
 Design rules:
   * Inhale/exhale FAIL SOFT: a CEM outage never breaks the user's session;
@@ -23,6 +24,7 @@ import json
 import os
 import re
 import secrets
+import subprocess
 import sys
 import tempfile
 import time
@@ -34,8 +36,14 @@ PLUGIN_ROOT = Path(os.environ.get("CLAUDE_PLUGIN_ROOT", Path(__file__).resolve()
 DEFAULT_URL = "https://cem888-continuity-mcp.chandlermorone.workers.dev/mcp"
 MCP_URL = os.environ.get("CEM888_CONTINUITY_URL", DEFAULT_URL)
 HOST_TYPE = "claude"
-DRIVER = "cem888-runtime cowork plugin hooks v0.1.0"
-HTTP_TIMEOUT = float(os.environ.get("CEM888_HTTP_TIMEOUT", "8"))
+VERSION = "0.1.1"
+DRIVER = f"cem888-runtime cowork plugin hooks v{VERSION}"
+# Cloudflare's edge rejects the default "Python-urllib/*" agent (Error 1010).
+USER_AGENT = f"cem888-runtime-hooks/{VERSION}"
+# begin is fast (~0.4s measured); commit is slow (~11s measured), so the exhale
+# runs detached and never blocks the user.
+BEGIN_TIMEOUT = float(os.environ.get("CEM888_BEGIN_TIMEOUT", "8"))
+FINISH_TIMEOUT = float(os.environ.get("CEM888_FINISH_TIMEOUT", "45"))
 MAX_CONTEXT_CHARS = int(os.environ.get("CEM888_MAX_CONTEXT_CHARS", "12000"))
 
 
@@ -89,8 +97,9 @@ class CEMError(RuntimeError):
     pass
 
 
-def _post(payload: dict, session_id: str | None) -> tuple[dict | None, str | None]:
+def _post(payload: dict, session_id: str | None, timeout: float) -> tuple[dict | None, str | None]:
     headers = {
+        "User-Agent": USER_AGENT,
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
         "MCP-Protocol-Version": "2025-06-18",
@@ -102,7 +111,7 @@ def _post(payload: dict, session_id: str | None) -> tuple[dict | None, str | Non
         headers["Mcp-Session-Id"] = session_id
     req = urllib.request.Request(MCP_URL, data=json.dumps(payload).encode(), headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             new_session = resp.headers.get("Mcp-Session-Id") or session_id
             body = resp.read().decode("utf-8", errors="replace")
             ctype = resp.headers.get("Content-Type", "")
@@ -130,15 +139,15 @@ def _session_file() -> Path:
     return STATE_DIR / "mcp_session.json"
 
 
-def _init_session() -> str | None:
+def _init_session(timeout: float) -> str | None:
     msg, sid = _post({
         "jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                   "clientInfo": {"name": "cem888-runtime-hooks", "version": "0.1.0"}},
-    }, None)
+                   "clientInfo": {"name": "cem888-runtime-hooks", "version": VERSION}},
+    }, None, timeout)
     if msg and "error" in msg:
         raise CEMError(f"initialize: {msg['error']}")
-    _post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
+    _post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid, timeout)
     try:
         _session_file().write_text(json.dumps({"sid": sid, "at": time.time()}))
     except OSError:
@@ -156,16 +165,16 @@ def _cached_session() -> str | None:
     return None
 
 
-def call_tool(name: str, arguments: dict) -> dict:
+def call_tool(name: str, arguments: dict, timeout: float = BEGIN_TIMEOUT) -> dict:
     """Call a CEM888 Continuity tool; returns the parsed JSON result object."""
     sid = _cached_session()
     for attempt in range(2):
         if sid is None or attempt == 1:
-            sid = _init_session()
+            sid = _init_session(BEGIN_TIMEOUT)
         try:
             msg, _ = _post({"jsonrpc": "2.0", "id": secrets.randbelow(10**9),
                             "method": "tools/call",
-                            "params": {"name": name, "arguments": arguments}}, sid)
+                            "params": {"name": name, "arguments": arguments}}, sid, timeout)
         except CEMError as exc:
             if attempt == 0 and ("HTTP 404" in str(exc) or "HTTP 400" in str(exc)):
                 continue  # stale MCP session: re-initialize once
@@ -227,6 +236,7 @@ PACKET_RULES = (
 
 def on_session_start(event: dict) -> None:
     sid = event.get("session_id", "unknown")
+    _flush_stale_pending(min_age=0)
     try:
         data = call_tool("cem_start_conversation", {"host_type": HOST_TYPE, "session_id": sid,
                                                     "host_conversation_id": sid})
@@ -314,6 +324,67 @@ def _last_turn_from_transcript(path: str) -> tuple[str, list[dict]]:
     return "\n".join(t for t in texts if t).strip(), tools[:50]
 
 
+def _pending_files() -> list[Path]:
+    return sorted(STATE_DIR.glob("pending_*.json"))
+
+
+def _spawn_exhale(pending: Path) -> None:
+    """Run the commit in a detached process so Stop returns immediately."""
+    if os.environ.get("CEM888_SYNC_EXHALE") == "1":
+        _exhale_worker(pending)
+        return
+    try:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "exhale-worker", str(pending)],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    except OSError as exc:
+        log(f"exhale spawn FAIL {exc}; running inline")
+        _exhale_worker(pending)
+
+
+def _exhale_worker(pending: Path) -> None:
+    lock = pending.with_suffix(".lock")
+    try:
+        if lock.exists() and time.time() - lock.stat().st_mtime > 600:
+            lock.unlink(missing_ok=True)  # stale lock from a killed worker
+        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+    except FileExistsError:
+        return  # another worker owns this turn
+    except OSError as exc:
+        log(f"exhale lock FAIL {exc}")
+        return
+    try:
+        job = json.loads(pending.read_text())
+        args = job["args"]
+        for attempt in range(3):  # identical turn id on every retry -> idempotent replay
+            try:
+                data = call_tool("cem_finish_external_turn", args, timeout=FINISH_TIMEOUT)
+                got_agent = data.get("agent_id")
+                if job.get("agent_id") and got_agent and got_agent != job["agent_id"]:
+                    log(f"finish AGENT MISMATCH turn={args['external_turn_id']} begun={job['agent_id']} finished={got_agent}")
+                log(f"finish ok turn={args['external_turn_id']} status={data.get('status')} attempt={attempt + 1}")
+                pending.unlink(missing_ok=True)
+                return
+            except CEMError as exc:
+                log(f"finish attempt {attempt + 1} FAIL turn={args['external_turn_id']} {exc}")
+                time.sleep(2 * (attempt + 1))
+        log(f"finish deferred turn={args['external_turn_id']}; will retry on next Stop/SessionStart")
+    except (OSError, ValueError, KeyError) as exc:
+        log(f"exhale worker FAIL {pending.name} {exc!r}")
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _flush_stale_pending(min_age: float = 120) -> None:
+    for pending in _pending_files():
+        try:
+            if time.time() - pending.stat().st_mtime >= min_age:
+                _spawn_exhale(pending)
+        except OSError:
+            continue
+
+
 def on_stop(event: dict) -> None:
     sid = event.get("session_id", "unknown")
     tf = _turn_file(sid)
@@ -321,6 +392,7 @@ def on_stop(event: dict) -> None:
         turn = json.loads(tf.read_text())
     except (OSError, ValueError):
         log(f"stop: no begun turn for sid={sid}; nothing to exhale")
+        _flush_stale_pending()
         return
     text, tools = _last_turn_from_transcript(str(event.get("transcript_path", "")))
     if not text:
@@ -331,18 +403,18 @@ def on_stop(event: dict) -> None:
         "assistant_response": text[:16000],
         "tool_calls": tools,
     }
-    for attempt in range(2):  # identical turn id on retry -> idempotent replay
-        try:
-            data = call_tool("cem_finish_external_turn", args)
-            got_agent = data.get("agent_id")
-            if turn.get("agent_id") and got_agent and got_agent != turn["agent_id"]:
-                log(f"finish AGENT MISMATCH turn={turn['turn_id']} begun={turn['agent_id']} finished={got_agent}")
-            log(f"finish ok sid={sid} turn={turn['turn_id']} status={data.get('status')}")
-            tf.unlink(missing_ok=True)
-            return
-        except CEMError as exc:
-            log(f"finish attempt {attempt + 1} FAIL turn={turn['turn_id']} {exc}")
-    # Keep the turn file: the next Stop for this session retries the same id.
+    pending = STATE_DIR / f"pending_{turn['turn_id']}.json"
+    try:
+        pending.write_text(json.dumps({"args": args, "agent_id": turn.get("agent_id"), "sid": sid}))
+    except OSError as exc:
+        log(f"pending write FAIL {exc}; exhaling inline")
+        tf.unlink(missing_ok=True)
+        call_tool("cem_finish_external_turn", args, timeout=FINISH_TIMEOUT)
+        return
+    tf.unlink(missing_ok=True)  # the turn is now owned by its pending job
+    log(f"stop queued turn={turn['turn_id']}")
+    _spawn_exhale(pending)
+    _flush_stale_pending()
 
 
 # ─────────────────────── prohibition gate ───────────────────────
@@ -443,6 +515,12 @@ HANDLERS = {
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "exhale-worker":
+        try:
+            _exhale_worker(Path(sys.argv[2]))
+        except Exception as exc:  # noqa: BLE001
+            log(f"exhale-worker CRASH {exc!r}")
+        return 0
     if len(sys.argv) != 2 or sys.argv[1] not in HANDLERS:
         sys.stderr.write(f"usage: cem_hook.py {{{'|'.join(HANDLERS)}}}\n")
         return 0
