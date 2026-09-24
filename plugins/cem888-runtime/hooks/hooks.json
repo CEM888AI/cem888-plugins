@@ -1,12 +1,13 @@
 {
-  "description": "CEM888 lifecycle: SessionStart inhale, UserPromptSubmit begin-turn inhale, PreToolUse owner-prohibition gate, Stop exhale.",
+  "description": "CEM888 lifecycle: SessionStart inhale, UserPromptSubmit begin-turn inhale, PreToolUse owner-prohibition gate, PostToolUse mid-work refresh, Stop exhale.",
   "hooks": {
     "SessionStart": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" session-start",
+            "command": "printf 'CEMHOOK SessionStart %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; printf 'CEMHOOK SessionStart\\n' >> /tmp/cem_hook_proof 2>/dev/null; for P in python3 /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3; do if command -v \"$P\" >/dev/null 2>&1; then \"$P\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" session-start; exit 0; fi; done; printf 'CEMHOOK NO_PYTHON SessionStart\\n' >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; exit 0",
             "timeout": 30
           }
         ]
@@ -14,10 +15,11 @@
     ],
     "UserPromptSubmit": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" prompt-submit",
+            "command": "printf 'CEMHOOK UserPromptSubmit %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; printf 'CEMHOOK UserPromptSubmit\\n' >> /tmp/cem_hook_proof 2>/dev/null; for P in python3 /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3; do if command -v \"$P\" >/dev/null 2>&1; then \"$P\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" prompt-submit; exit 0; fi; done; printf 'CEMHOOK NO_PYTHON UserPromptSubmit\\n' >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; exit 0",
             "timeout": 30
           }
         ]
@@ -29,18 +31,31 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" pre-tool",
+            "command": "printf 'CEMHOOK PreToolUse %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; printf 'CEMHOOK PreToolUse\\n' >> /tmp/cem_hook_proof 2>/dev/null; for P in python3 /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3; do if command -v \"$P\" >/dev/null 2>&1; then \"$P\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" pre-tool; exit 0; fi; done; exit 0",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf 'CEMHOOK PostToolUse %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; printf 'CEMHOOK PostToolUse\\n' >> /tmp/cem_hook_proof 2>/dev/null; for P in python3 /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3; do if command -v \"$P\" >/dev/null 2>&1; then \"$P\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" post-tool; exit 0; fi; done; exit 0",
+            "timeout": 15
           }
         ]
       }
     ],
     "Stop": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" stop",
+            "command": "printf 'CEMHOOK Stop %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" >> \"${CLAUDE_PLUGIN_ROOT}/hook_proof.txt\" 2>/dev/null; printf 'CEMHOOK Stop\\n' >> /tmp/cem_hook_proof 2>/dev/null; for P in python3 /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3; do if command -v \"$P\" >/dev/null 2>&1; then \"$P\" \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/cem_hook.py\" stop; exit 0; fi; done; exit 0",
             "timeout": 60
           }
         ]

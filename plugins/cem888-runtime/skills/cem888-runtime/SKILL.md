@@ -1,6 +1,6 @@
 ---
 name: cem888-runtime
-description: CEM888 runtime behavior when the cem888-runtime plugin hooks are active. Use whenever a <cem888_turn_context>, <cem888_session_state> or <cem888_status> block appears in the conversation, when a tool call is denied with a CEM888_ reason, or when the user asks about CEM888 state, their agent, prior work, decisions, or what was already tried.
+description: CEM888 runtime behavior when the cem888-runtime plugin hooks are active. Use whenever a cem888_turn_context, cem888_session_state or cem888_status block appears in the conversation, when a tool call is denied with a CEM888_ reason, or when the user asks about CEM888 state, their agent, prior work, decisions, or what was already tried.
 ---
 
 # CEM888 runtime (hook-driven)
