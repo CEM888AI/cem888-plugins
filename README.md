@@ -27,4 +27,4 @@ Official plugin marketplace for [CEM888](https://cem888.ai) — the reliability,
 
 Status: **BETA**. See `plugins/cem888-runtime/README.md` for setup, rules format, and the honest enforcement limits.
 
-License: AGPL-3.0. Commercial licensing: creator@cem888.ai
+License: Business Source License 1.1. Personal non-commercial use and evaluation are available under the BSL grant; business production use requires a commercial license from CEM Unlimited LLC. Commercial licensing: creator@cem888.ai
