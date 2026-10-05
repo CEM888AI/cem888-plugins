@@ -27,4 +27,4 @@ Official plugin marketplace for [CEM888](https://cem888.ai) — the reliability,
 
 Status: **BETA**. See `plugins/cem888-runtime/README.md` for setup, rules format, and the honest enforcement limits.
 
-License: Business Source License 1.1. Personal non-commercial use and evaluation are available under the BSL grant; business production use requires a commercial license from CEM Unlimited LLC. Commercial licensing: creator@cem888.ai
+License: Elastic License 2.0 (ELv2) — source-available, never converts. Use, copy, distribute and modify freely; you may not provide the plugins to third parties as a hosted or managed service, and you may not move, change, disable or circumvent the license key functionality. Business production use, resale, embedding, white-labeling and OEM use require a commercial license from CEM Unlimited LLC. Plugins released on or after 2026-10-01 under Business Source License 1.1 remain under those terms. Commercial licensing: creator@cem888.ai
